@@ -18,10 +18,12 @@ func main() {
 	defer file.Close()
 
 	buf := make([]byte, 8)
-
-	for {
+	for line := make([]byte, 0); ; {
 		n, err := file.Read(buf)
 		if err == io.EOF {
+			if len(line) != 0 {
+				fmt.Fprintf(os.Stdout, "read: %s\n", string(line))
+			}
 			break
 		}
 
@@ -31,6 +33,13 @@ func main() {
 			os.Exit(1)
 		}
 
-		fmt.Fprintf(os.Stdout, "read: %s\n", buf[0:n])
+		for _, r := range buf[:n] {
+			if r == '\n' {
+				fmt.Fprintf(os.Stdout, "read: %s\n", string(line))
+				line = line[:0]
+				continue
+			}
+			line = append(line, r)
+		}
 	}
 }
