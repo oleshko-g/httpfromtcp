@@ -9,6 +9,7 @@ import (
 
 const (
 	network = "tcp"
+	port    = ":42069"
 )
 
 func getLinesChannel(r io.ReadCloser) <-chan string {
@@ -56,10 +57,13 @@ func getLinesChannel(r io.ReadCloser) <-chan string {
 }
 
 func main() {
-	listener, err := net.Listen(network, "127.0.0.1:42069")
+	address := fmt.Sprintf("127.0.0.1%s", port)
+	listener, err := net.Listen(network, address)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
+	fmt.Printf("Server listening on %s\n", address)
 	defer func() {
 		err := listener.Close()
 		if err != nil {
@@ -69,10 +73,11 @@ func main() {
 
 	for {
 		conn, err := listener.Accept()
-		fmt.Println("A connection has been accepted")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
+			continue
 		}
+		fmt.Println("A connection has been accepted")
 		lines := getLinesChannel(conn)
 		for v := range lines {
 			fmt.Fprintf(os.Stdout, "%s\n", v)
