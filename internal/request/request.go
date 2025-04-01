@@ -6,12 +6,22 @@ import (
 	"strings"
 )
 
-var versionsSupported map[string]struct{} = map[string]struct{}{
-	"HTTP/1.1": {},
+var versionsSupported = map[string]struct{}{
+	"1.1": {},
 }
 
-var methodsSupported map[string]struct{} = map[string]struct{}{
+func versionSupported(s string) bool {
+	_, ok := versionsSupported[s]
+	return ok
+}
+
+var methodsSupported = map[string]struct{}{
 	"GET": {},
+}
+
+func methodSupported(s string) bool {
+	_, ok := methodsSupported[s]
+	return ok
 }
 
 type Request struct {
@@ -24,31 +34,6 @@ type RequestLine struct {
 	RequestTarget string
 }
 
-func upperCaseLetters(s string) bool {
-	for _, rune := range s {
-		// 'A' is a literal of 0x41 number in ASCII encoding
-		// 'Z' is literal of 0x5A number in ASCII encoding
-		if rune < 'A' || rune > 'Z' {
-			return false
-		}
-	}
-	return true
-}
-
-func containsWhiteSpace(s string) bool {
-	return len(strings.Fields(s)) > 1
-}
-
-func methodSupported(s string) bool {
-	_, ok := methodsSupported[s]
-	return ok
-}
-
-func versionSupported(s string) bool {
-	_, ok := versionsSupported[s]
-	return ok
-}
-
 func RequestFromReader(r io.Reader) (*Request, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -57,19 +42,24 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 	requestLines := strings.Split(string(data), "\r\n")
 
 	parts := strings.Split(string(requestLines[0]), " ")
-	if len(parts) < 3 {
+	if len(parts) != 3 {
 		return nil, fmt.Errorf("400 Bad Request")
 	}
 
-	method, target, version := parts[0], parts[1], parts[2]
-
-	if !upperCaseLetters(method) {
+	if !validHTTPMethod(parts[0]) {
 		return nil, fmt.Errorf("400 Bad Request")
 	}
+	method := parts[0]
 
-	if containsWhiteSpace(target) {
+	if !validHTTPTarget(parts[1]) {
 		return nil, fmt.Errorf("400 Bad Request")
 	}
+	target := parts[1]
+
+	if !validHTTPVersion(parts[2]) {
+		return nil, fmt.Errorf("400 Bad Request")
+	}
+	version := strings.Split(parts[2], "/")[1]
 
 	if !versionSupported(version) {
 		return nil, fmt.Errorf("505 HTTP Version Not Supported")
@@ -81,7 +71,7 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 
 	return &Request{
 		RequestLine: RequestLine{
-			HttpVersion:   strings.Split(version, "/")[1],
+			HttpVersion:   version,
 			Method:        method,
 			RequestTarget: target,
 		},
