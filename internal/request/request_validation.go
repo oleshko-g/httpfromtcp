@@ -1,16 +1,12 @@
 package request
 
 import (
-	"strings"
+	"github.com/oleshko-g/httpfromtcp/internal/stringio"
 )
 
 const (
 	httpName = "HTTP"
 )
-
-func isDigit(r rune) bool {
-	return r >= '0' && r <= '9'
-}
 
 func validHTTPVersion(s string) bool {
 
@@ -26,7 +22,7 @@ func validHTTPVersion(s string) bool {
 		return false
 	}
 
-	if !isDigit(rune(s[5])) {
+	if !stringio.IsDigit(rune(s[5])) {
 		return false
 	}
 
@@ -34,32 +30,17 @@ func validHTTPVersion(s string) bool {
 		return false
 	}
 
-	if !isDigit(rune(s[7])) {
+	if !stringio.IsDigit(rune(s[7])) {
 		return false
 	}
 
 	return true
 }
 
-func upperCaseLetters(s string) bool {
-	for _, rune := range s {
-		// 'A' is a literal of 0x41 number in ASCII encoding
-		// 'Z' is literal of 0x5A number in ASCII encoding
-		if rune < 'A' || rune > 'Z' {
-			return false
-		}
-	}
-	return true
-}
-
 func validHTTPMethod(s string) bool {
-	return upperCaseLetters(s)
-}
-
-func containsWhiteSpace(s string) bool {
-	return len(strings.Fields(s)) > 1
+	return stringio.UpperCaseLetters(s)
 }
 
 func validHTTPTarget(s string) bool {
-	return !containsWhiteSpace(s)
+	return !stringio.ContainsWhiteSpace(s)
 }
