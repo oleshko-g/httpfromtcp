@@ -100,7 +100,6 @@ func parseRequestLine(data []byte) (int, RequestLine, error) {
 	const crlf = "\r\n"
 	idx := bytes.Index(data, []byte(crlf))
 	if idx == -1 {
-		fmt.Printf("%s\n", data)
 		return 0, RequestLine{}, nil
 	}
 	requestString := string(data[:idx])
