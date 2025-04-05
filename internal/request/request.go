@@ -24,8 +24,23 @@ func methodSupported(s string) bool {
 	return ok
 }
 
+type RequestState string
+
+func (rs *RequestState) RequestStateInitialized() RequestState {
+	return RequestState("initialized")
+}
+
+func (rs *RequestState) RequestStateDone() RequestState {
+	return RequestState("done")
+}
+
 type Request struct {
 	RequestLine RequestLine
+	state       RequestState
+}
+
+func (r *Request) parse(buf []byte) {
+
 }
 
 type RequestLine struct {
@@ -41,7 +56,18 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 	}
 	requestLines := strings.Split(string(data), "\r\n")
 
-	parts := strings.Split(string(requestLines[0]), " ")
+	requestLine, err := parseRequestLine([]byte(requestLines[0]))
+	if err != nil {
+		return &Request{}, err
+	}
+
+	return &Request{
+		RequestLine: *requestLine,
+	}, nil
+}
+
+func parseRequestLine(data []byte) (*RequestLine, error) {
+	parts := strings.Split(string(data), " ")
 	if len(parts) != 3 {
 		return nil, fmt.Errorf("400 Bad Request")
 	}
@@ -68,12 +94,9 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 	if !methodSupported(method) {
 		return nil, fmt.Errorf("501 Not Implemented")
 	}
-
-	return &Request{
-		RequestLine: RequestLine{
-			HttpVersion:   version,
-			Method:        method,
-			RequestTarget: target,
-		},
+	return &RequestLine{
+		HttpVersion:   version,
+		Method:        method,
+		RequestTarget: target,
 	}, nil
 }
