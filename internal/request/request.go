@@ -1,6 +1,7 @@
 package request
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strings"
@@ -26,11 +27,11 @@ func methodSupported(s string) bool {
 
 type RequestState string
 
-func (rs *RequestState) RequestStateInitialized() RequestState {
+func RequestStateInitialized() RequestState {
 	return RequestState("initialized")
 }
 
-func (rs *RequestState) RequestStateDone() RequestState {
+func RequestStateDone() RequestState {
 	return RequestState("done")
 }
 
@@ -39,8 +40,13 @@ type Request struct {
 	state       RequestState
 }
 
-func (r *Request) parse(buf []byte) {
-
+func (r *Request) parse(data []byte) (int, error) {
+	n, rl, err := parseRequestLine(data)
+	if n > 0 {
+		r.RequestLine = rl
+		r.state = RequestStateDone()
+	}
+	return n, err
 }
 
 type RequestLine struct {
@@ -50,51 +56,83 @@ type RequestLine struct {
 }
 
 func RequestFromReader(r io.Reader) (*Request, error) {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-	requestLines := strings.Split(string(data), "\r\n")
-
-	requestLine, err := parseRequestLine([]byte(requestLines[0]))
-	if err != nil {
-		return &Request{}, err
+	request := Request{
+		RequestLine: RequestLine{},
+		state:       RequestStateInitialized(),
 	}
 
-	return &Request{
-		RequestLine: *requestLine,
-	}, nil
+	var bytesReadTo int
+	var bytesParsedTo int
+	for buf := make([]byte, 8); request.state != RequestStateDone(); {
+		if bytesReadTo == len(buf) {
+			buffer := make([]byte, len(buf)*2)
+			copy(buffer, buf)
+			buf = buffer
+		}
+
+		bytesRead, errRead := r.Read(buf[bytesReadTo:])
+		if errRead != nil {
+			return &Request{}, errRead
+		}
+		bytesReadTo += bytesRead
+
+		bytesParsed, errParse := request.parse(buf[:bytesReadTo])
+		if errParse != nil {
+			return &Request{}, errParse
+		}
+		if bytesParsed > 0 {
+			bytesParsedTo += bytesParsed
+			copy(buf, buf[bytesParsedTo:bytesReadTo])
+			bytesReadTo -= bytesParsedTo
+		}
+		if errRead == io.EOF {
+			if request.state != RequestStateDone() {
+				return nil, fmt.Errorf("unexpected EOF before complete request")
+			}
+			break
+		}
+	}
+
+	return &request, nil
 }
 
-func parseRequestLine(data []byte) (*RequestLine, error) {
-	parts := strings.Split(string(data), " ")
+func parseRequestLine(data []byte) (int, RequestLine, error) {
+	const crlf = "\r\n"
+	idx := bytes.Index(data, []byte(crlf))
+	if idx == -1 {
+		fmt.Printf("%s\n", data)
+		return 0, RequestLine{}, nil
+	}
+	requestString := string(data[:idx])
+
+	parts := strings.Split(requestString, " ")
 	if len(parts) != 3 {
-		return nil, fmt.Errorf("400 Bad Request")
+		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
 	}
 
 	if !validHTTPMethod(parts[0]) {
-		return nil, fmt.Errorf("400 Bad Request")
+		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
 	}
 	method := parts[0]
 
 	if !validHTTPTarget(parts[1]) {
-		return nil, fmt.Errorf("400 Bad Request")
+		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
 	}
 	target := parts[1]
 
 	if !validHTTPVersion(parts[2]) {
-		return nil, fmt.Errorf("400 Bad Request")
+		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
 	}
 	version := strings.Split(parts[2], "/")[1]
 
 	if !versionSupported(version) {
-		return nil, fmt.Errorf("505 HTTP Version Not Supported")
+		return 0, RequestLine{}, fmt.Errorf("505 HTTP Version Not Supported")
 	}
 
 	if !methodSupported(method) {
-		return nil, fmt.Errorf("501 Not Implemented")
+		return 0, RequestLine{}, fmt.Errorf("501 Not Implemented")
 	}
-	return &RequestLine{
+	return idx + 2, RequestLine{
 		HttpVersion:   version,
 		Method:        method,
 		RequestTarget: target,
