@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/oleshko-g/httpfromtcp/internal/headers"
 )
 
 var versionsSupported = map[string]struct{}{
@@ -31,12 +33,17 @@ func RequestStateInitialized() RequestState {
 	return RequestState("initialized")
 }
 
+func RequestStateParsingHeaders() RequestState {
+	return RequestState("parsing headers")
+}
+
 func RequestStateDone() RequestState {
 	return RequestState("done")
 }
 
 type Request struct {
 	RequestLine RequestLine
+	Headers     headers.Headers
 	state       RequestState
 }
 
@@ -58,6 +65,7 @@ type RequestLine struct {
 func RequestFromReader(r io.Reader) (*Request, error) {
 	request := Request{
 		RequestLine: RequestLine{},
+		Headers:     make(headers.Headers),
 		state:       RequestStateInitialized(),
 	}
 
