@@ -25,15 +25,13 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 				return 0, false, fmt.Errorf("400 Bad Request")
 			}
 
-			fieldValue := bytes.Fields(rawFieldLine[colonIndex+1:])
-			if len(fieldValue) == 1 {
-				h[fieldName] = string(fieldValue[0])
-				return crlfIndex + 2, false, nil
+			fieldValue := string(bytes.TrimSpace(rawFieldLine[colonIndex+1:]))
+			if len(fieldValue) == 0 {
+				return crlfIndex + 2, false, nil // emtry value. discard this rawFieldLine
 			}
 
-			if len(fieldValue) == 0 || len(fieldValue) > 1 {
-				return crlfIndex + 2, false, nil // discard this rawFieldLine
-			}
+			h[fieldName] = string(fieldValue)
+			return crlfIndex + 2, false, nil
 		}
 
 		if colonIndex == -1 || colonIndex == 0 {

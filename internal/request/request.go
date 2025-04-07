@@ -48,12 +48,27 @@ type Request struct {
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	n, rl, err := parseRequestLine(data)
-	if n > 0 {
-		r.RequestLine = rl
-		r.state = RequestStateDone()
+	var bytesParsed int
+	var err error
+	switch r.state {
+	case RequestStateInitialized():
+		bytesParsed, r.RequestLine, err = parseRequestLine(data)
+		if bytesParsed > 0 {
+			defer func() { r.state = RequestStateParsingHeaders() }()
+			return bytesParsed, nil
+		}
+	case RequestStateParsingHeaders():
+		bytesParsed, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+
+		if done {
+			r.state = RequestStateDone()
+		}
+		return bytesParsed, nil
 	}
-	return n, err
+	return 0, err
 }
 
 type RequestLine struct {
@@ -70,7 +85,6 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 	}
 
 	var bytesReadTo int
-	var bytesParsedTo int
 	for buf := make([]byte, 8); request.state != RequestStateDone(); {
 		if bytesReadTo == len(buf) {
 			buffer := make([]byte, len(buf)*2)
@@ -79,7 +93,7 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 		}
 
 		bytesRead, errRead := r.Read(buf[bytesReadTo:])
-		if errRead != nil {
+		if errRead != nil && errRead != io.EOF {
 			return &Request{}, errRead
 		}
 		bytesReadTo += bytesRead
@@ -89,10 +103,10 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 			return &Request{}, errParse
 		}
 		if bytesParsed > 0 {
-			bytesParsedTo += bytesParsed
-			copy(buf, buf[bytesParsedTo:bytesReadTo])
-			bytesReadTo -= bytesParsedTo
+			copy(buf, buf[bytesParsed:bytesReadTo])
+			bytesReadTo -= bytesParsed
 		}
+
 		if errRead == io.EOF {
 			if request.state != RequestStateDone() {
 				return nil, fmt.Errorf("unexpected EOF before complete request")
