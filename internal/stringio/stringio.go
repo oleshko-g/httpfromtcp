@@ -11,6 +11,18 @@ func UpperCaseLetters(s string) bool {
 	return true
 }
 
+func IsLowerCaseLetter(r rune) bool {
+	return r >= 'a' && r <= 'z'
+}
+func IsValidSpecialCharacter(r rune) bool {
+	isValid := false
+	switch r {
+	case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~':
+		isValid = true
+	}
+	return isValid
+}
+
 func IsDigit(r rune) bool {
 	return r >= '0' && r <= '9'
 }

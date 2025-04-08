@@ -20,8 +20,8 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		rawFieldLine := data[:crlfIndex]
 		colonIndex := bytes.Index(rawFieldLine, []byte(":"))
 		if colonIndex > 0 {
-			fieldName := string(rawFieldLine[:colonIndex])
-			if stringio.ContainsWhiteSpace(fieldName) {
+			fieldName, err := validFieldName(rawFieldLine[:colonIndex])
+			if err != nil {
 				return 0, false, fmt.Errorf("400 Bad Request")
 			}
 
@@ -48,4 +48,21 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	}
 
 	return 0, false, nil
+}
+
+func validFieldName(data []byte) (string, error) {
+	fieldName := string(bytes.ToLower(data))
+	for i, v := range fieldName {
+		if stringio.IsWhiteSpace(v) {
+			return "", fmt.Errorf("white space in the field name at index [%d]", i)
+		}
+
+		if !stringio.IsDigit(v) &&
+			!stringio.IsLowerCaseLetter(v) &&
+			!stringio.IsValidSpecialCharacter(v) {
+			return "", fmt.Errorf("invalid character %v at index [%d]", v, i)
+		}
+	}
+
+	return fieldName, nil
 }
