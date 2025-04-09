@@ -30,6 +30,11 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 				return crlfIndex + 2, false, nil // emtry value. discard this rawFieldLine
 			}
 
+			if v, ok := h[fieldName]; ok {
+				h[fieldName] = v + ", " + string(fieldValue)
+				return crlfIndex + 2, false, nil
+			}
+
 			h[fieldName] = string(fieldValue)
 			return crlfIndex + 2, false, nil
 		}
