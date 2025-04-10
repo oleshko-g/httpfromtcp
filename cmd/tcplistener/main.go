@@ -40,7 +40,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			continue
 		}
-		fmt.Printf("Request line:\n- Method: %s\n- Target: %s\n- Version: %s\n", req.RequestLine.Method, req.RequestLine.RequestTarget, req.RequestLine.HttpVersion)
+		req.PrintRequestLine()
+		req.PrintHeaders()
 		fmt.Println("A connection has been closed")
 	}
 
