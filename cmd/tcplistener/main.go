@@ -42,6 +42,7 @@ func main() {
 		}
 		req.PrintRequestLine()
 		req.PrintHeaders()
+		req.PrintBody()
 		fmt.Println("A connection has been closed")
 	}
 

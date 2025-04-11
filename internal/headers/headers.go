@@ -3,6 +3,7 @@ package headers
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/oleshko-g/httpfromtcp/internal/stringio"
 )
@@ -61,6 +62,12 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 			return bytesParsed + 0, false, nil
 		}
 	}
+}
+
+func (h Headers) Get(header string) (value string, ok bool) {
+	header = strings.ToLower(header)
+	value, ok = h[header]
+	return value, ok
 }
 
 func validFieldName(data []byte) (string, error) {

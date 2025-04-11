@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/oleshko-g/httpfromtcp/internal/headers"
@@ -19,7 +20,8 @@ func versionSupported(s string) bool {
 }
 
 var methodsSupported = map[string]struct{}{
-	"GET": {},
+	"GET":  {},
+	"POST": {},
 }
 
 func methodSupported(s string) bool {
@@ -37,6 +39,10 @@ func RequestStateParsingHeaders() RequestState {
 	return RequestState("parsing headers")
 }
 
+func RequestStateParsingBody() RequestState {
+	return RequestState("parsing body")
+}
+
 func RequestStateDone() RequestState {
 	return RequestState("done")
 }
@@ -44,7 +50,21 @@ func RequestStateDone() RequestState {
 type Request struct {
 	RequestLine RequestLine
 	Headers     headers.Headers
+	Body        []byte
 	state       RequestState
+}
+
+func (r *Request) getContentLength() (int, bool, error) {
+	value, ok := r.Headers.Get("content-length")
+	if ok {
+		contentLength, err := strconv.Atoi(value)
+		if err != nil {
+			return 0, false, err
+		}
+		return contentLength, ok, nil
+	}
+
+	return 0, false, nil
 }
 
 func (r *Request) parse(data []byte) (int, error) {
@@ -62,8 +82,28 @@ func (r *Request) parse(data []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-
 		if done {
+			r.state = RequestStateParsingBody()
+		}
+		return bytesParsed, nil
+	case RequestStateParsingBody():
+		contentLength, ok, err := r.getContentLength()
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
+			r.state = RequestStateDone()
+			return 0, nil
+		}
+
+		bytesRemaining := contentLength - len(r.Body) // also handles zero content length
+
+		bytesToAppend := min(bytesRemaining, len(data))
+
+		r.Body = append(r.Body, data[:bytesToAppend]...) // also handles zero content length – appends up to zero bytes
+		bytesParsed = bytesToAppend
+
+		if len(r.Body) == contentLength {
 			r.state = RequestStateDone()
 		}
 		return bytesParsed, nil
