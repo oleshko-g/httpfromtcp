@@ -8,26 +8,9 @@ import (
 	"strings"
 
 	"github.com/oleshko-g/httpfromtcp/internal/headers"
+	"github.com/oleshko-g/httpfromtcp/internal/http"
+	"github.com/oleshko-g/httpfromtcp/internal/server"
 )
-
-var versionsSupported = map[string]struct{}{
-	"1.1": {},
-}
-
-func versionSupported(s string) bool {
-	_, ok := versionsSupported[s]
-	return ok
-}
-
-var methodsSupported = map[string]struct{}{
-	"GET":  {},
-	"POST": {},
-}
-
-func methodSupported(s string) bool {
-	_, ok := methodsSupported[s]
-	return ok
-}
 
 type RequestState string
 
@@ -171,26 +154,26 @@ func parseRequestLine(data []byte) (int, RequestLine, error) {
 		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
 	}
 
-	if !validHTTPMethod(parts[0]) {
+	if !http.ValidHTTPMethod(parts[0]) {
 		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
 	}
 	method := parts[0]
 
-	if !validHTTPTarget(parts[1]) {
+	if !http.ValidHTTPTarget(parts[1]) {
 		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
 	}
 	target := parts[1]
 
-	if !validHTTPVersion(parts[2]) {
+	if !http.ValidHTTPVersion(parts[2]) {
 		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
 	}
 	version := strings.Split(parts[2], "/")[1]
 
-	if !versionSupported(version) {
+	if !server.VersionSupported(version) {
 		return 0, RequestLine{}, fmt.Errorf("505 HTTP Version Not Supported")
 	}
 
-	if !methodSupported(method) {
+	if !server.MethodSupported(method) {
 		return 0, RequestLine{}, fmt.Errorf("501 Not Implemented")
 	}
 	return idx + 2, RequestLine{

@@ -1,4 +1,4 @@
-package request
+package http
 
 import (
 	"github.com/oleshko-g/httpfromtcp/internal/stringio"
@@ -8,7 +8,11 @@ const (
 	httpName = "HTTP"
 )
 
-func validHTTPVersion(s string) bool {
+func GetHttpVersion(version string) string {
+	return httpName + "/" + version
+}
+
+func ValidHTTPVersion(s string) bool {
 
 	if len(s) != 8 { // lenth of 'HTTP/DIGIT.DIGIT" in bytes
 		return false
@@ -37,10 +41,10 @@ func validHTTPVersion(s string) bool {
 	return true
 }
 
-func validHTTPMethod(s string) bool {
+func ValidHTTPMethod(s string) bool {
 	return stringio.UpperCaseLetters(s)
 }
 
-func validHTTPTarget(s string) bool {
+func ValidHTTPTarget(s string) bool {
 	return !stringio.ContainsWhiteSpace(s)
 }
