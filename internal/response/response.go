@@ -2,7 +2,9 @@ package response
 
 import (
 	"io"
+	"strconv"
 
+	"github.com/oleshko-g/httpfromtcp/internal/headers"
 	_ "github.com/oleshko-g/httpfromtcp/internal/headers"
 	"github.com/oleshko-g/httpfromtcp/internal/http"
 	_ "github.com/oleshko-g/httpfromtcp/internal/server"
@@ -39,4 +41,13 @@ func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
 	buf := []byte(newStatusLine("1.1", statusCode))
 	_, err := w.Write(buf)
 	return err
+}
+
+func GetDefaultHeaders(contentLength int) headers.Headers {
+	headers := headers.Headers{
+		"Content-Length": strconv.Itoa(contentLength),
+		"Connection":     "close",
+		"Content-Type":   "test/plain",
+	}
+	return headers
 }
