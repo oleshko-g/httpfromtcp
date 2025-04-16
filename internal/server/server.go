@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	_ "github.com/oleshko-g/httpfromtcp/internal/http"
+	"github.com/oleshko-g/httpfromtcp/internal/response"
 )
 
 const (
@@ -78,5 +79,10 @@ func (s *Server) listen() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-	conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nHello World!"))
+	headers := response.GetDefaultHeaders(0)
+	response.WriteStatusLine(conn, response.StatusCodeOK())
+	err := response.WriteHeaders(conn, headers)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
 }

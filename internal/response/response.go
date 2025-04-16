@@ -5,28 +5,30 @@ import (
 	"strconv"
 
 	"github.com/oleshko-g/httpfromtcp/internal/headers"
-	_ "github.com/oleshko-g/httpfromtcp/internal/headers"
 	"github.com/oleshko-g/httpfromtcp/internal/http"
-	_ "github.com/oleshko-g/httpfromtcp/internal/server"
 )
 
 var statusCodes = map[StatusCode]string{
-	statusCodeOK():                  "OK",
-	statusCodeBadRequest():          "Bad Request",
-	statusCodeInternalServerError(): "Internal Server Error",
+	StatusCodeOK():                  "OK",
+	StatusCodeBadRequest():          "Bad Request",
+	StatusCodeInternalServerError(): "Internal Server Error",
 }
 
 type StatusCode [3]rune
 
-func statusCodeOK() StatusCode {
+func (s *StatusCode) String() string {
+	return string(s[:])
+}
+
+func StatusCodeOK() StatusCode {
 	return StatusCode{'2', '0', '0'}
 }
 
-func statusCodeBadRequest() StatusCode {
+func StatusCodeBadRequest() StatusCode {
 	return StatusCode{'4', '0', '0'}
 }
 
-func statusCodeInternalServerError() StatusCode {
+func StatusCodeInternalServerError() StatusCode {
 	return StatusCode{'5', '0', '0'}
 }
 
@@ -34,7 +36,9 @@ type StatusLine string
 
 func newStatusLine(version string, s StatusCode) string {
 	reasonPhrase := statusCodes[s]
-	return http.GetHttpVersion(version) + " " + string(s[:]) + " " + reasonPhrase + "\r\n"
+	return http.GetHttpVersion(version) + " " +
+		s.String() + " " +
+		reasonPhrase + "\r\n"
 }
 
 func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
@@ -47,7 +51,24 @@ func GetDefaultHeaders(contentLength int) headers.Headers {
 	headers := headers.Headers{
 		"Content-Length": strconv.Itoa(contentLength),
 		"Connection":     "close",
-		"Content-Type":   "test/plain",
+		"Content-Type":   "text/plain",
 	}
 	return headers
+}
+
+func WriteHeaders(w io.Writer, headers headers.Headers) error {
+	buf := headersToBuf(headers)
+	_, err := w.Write(buf)
+	return err
+}
+
+func headersToBuf(headers headers.Headers) []byte {
+	var buf []byte
+	for header, value := range headers {
+		buf = append(buf, []byte(header+": ")...)
+		buf = append(buf, []byte(value)...)
+		buf = append(buf, '\r', '\n')
+	}
+	buf = append(buf, '\r', '\n')
+	return buf
 }
