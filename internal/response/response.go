@@ -32,8 +32,6 @@ func StatusCodeInternalServerError() StatusCode {
 	return StatusCode{'5', '0', '0'}
 }
 
-type StatusLine string
-
 func newStatusLine(version string, s StatusCode) string {
 	reasonPhrase := statusCodes[s]
 	return http.GetHttpVersion(version) + " " +
@@ -71,4 +69,10 @@ func headersToBuf(headers headers.Headers) []byte {
 	}
 	buf = append(buf, '\r', '\n')
 	return buf
+}
+
+func WriteBody(w io.Writer, s string) {
+	buf := []byte(s)
+	buf = append(buf, '\r', '\n')
+	w.Write(buf)
 }
