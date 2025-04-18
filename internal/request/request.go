@@ -9,7 +9,6 @@ import (
 
 	"github.com/oleshko-g/httpfromtcp/internal/headers"
 	"github.com/oleshko-g/httpfromtcp/internal/http"
-	"github.com/oleshko-g/httpfromtcp/internal/server"
 )
 
 type RequestState string
@@ -169,11 +168,11 @@ func parseRequestLine(data []byte) (int, RequestLine, error) {
 	}
 	version := strings.Split(parts[2], "/")[1]
 
-	if !server.VersionSupported(version) {
+	if !VersionSupported(version) {
 		return 0, RequestLine{}, fmt.Errorf("505 HTTP Version Not Supported")
 	}
 
-	if !server.MethodSupported(method) {
+	if !MethodSupported(method) {
 		return 0, RequestLine{}, fmt.Errorf("501 Not Implemented")
 	}
 	return idx + 2, RequestLine{
