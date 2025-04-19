@@ -30,10 +30,11 @@ func RequestStateDone() RequestState {
 }
 
 type Request struct {
-	RequestLine RequestLine
-	Headers     headers.Headers
-	Body        []byte
-	state       RequestState
+	RequestLine   RequestLine
+	Headers       headers.Headers
+	Body          []byte
+	state         RequestState
+	contentLength int
 }
 
 func (r *Request) getContentLength() (int, bool, error) {
@@ -65,27 +66,28 @@ func (r *Request) parse(data []byte) (int, error) {
 			return 0, err
 		}
 		if done {
+			contentLength, ok, err := r.getContentLength()
+			if err != nil {
+				return 0, err
+			}
+			if !ok {
+				r.state = RequestStateDone()
+				return 0, nil
+			}
+			r.contentLength = contentLength
 			r.state = RequestStateParsingBody()
 		}
 		return bytesParsed, nil
 	case RequestStateParsingBody():
-		contentLength, ok, err := r.getContentLength()
-		if err != nil {
-			return 0, err
-		}
-		if !ok {
-			r.state = RequestStateDone()
-			return 0, nil
-		}
 
-		bytesRemaining := contentLength - len(r.Body) // also handles zero content length
+		bytesRemaining := r.contentLength - len(r.Body) // also handles zero content length
 
 		bytesToAppend := min(bytesRemaining, len(data))
 
 		r.Body = append(r.Body, data[:bytesToAppend]...) // also handles zero content length – appends up to zero bytes
 		bytesParsed = bytesToAppend
 
-		if len(r.Body) == contentLength {
+		if len(r.Body) == r.contentLength {
 			r.state = RequestStateDone()
 		}
 		return bytesParsed, nil
@@ -113,7 +115,6 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 			copy(buffer, buf)
 			buf = buffer
 		}
-
 		bytesRead, errRead := r.Read(buf[bytesReadTo:])
 		if errRead != nil && errRead != io.EOF {
 			return &Request{}, errRead
