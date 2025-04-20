@@ -1,6 +1,8 @@
 package response
 
 import (
+	"bytes"
+	"fmt"
 	"io"
 	"strconv"
 
@@ -12,6 +14,72 @@ var statusCodes = map[StatusCode]string{
 	StatusCodeOK():                  "OK",
 	StatusCodeBadRequest():          "Bad Request",
 	StatusCodeInternalServerError(): "Internal Server Error",
+}
+
+type statusLine struct {
+	_HTTPVersion string
+	statusCode   StatusCode
+	reason       *string
+}
+
+type writerState string
+
+func writerStateInitialized() writerState {
+	return "Initialized"
+}
+func writerStateStatusLineWritten() writerState {
+	return "Status line written"
+}
+
+func writerStateHeadersWritten() writerState {
+	return "Headers written"
+}
+
+func writerStateBodyWritten() writerState {
+	return "Body written"
+}
+
+func writerStateDone() writerState {
+	return "Done"
+}
+
+type Writer struct {
+	statusLine *statusLine
+	headers    *headers.Headers
+	body       *bytes.Buffer
+	conn       io.Writer
+	state      writerState
+}
+
+func NewWriter(conn io.Writer) Writer {
+	return Writer{
+		state: writerStateInitialized(),
+	}
+}
+
+func (w *Writer) WriteStatusLine(sc StatusCode) error {
+	if w.state != writerStateInitialized() {
+		return fmt.Errorf("trying to write Status Line int Initialized Writer state")
+	}
+	w.state = writerStateStatusLineWritten()
+	return nil
+}
+
+func (w *Writer) WriteHeaders(h headers.Headers) error {
+	if w.state != writerStateStatusLineWritten() {
+		return fmt.Errorf("trying to write Headers not in StatusLineWritten state")
+	}
+	w.state = writerStateHeadersWritten()
+	return nil
+}
+
+func (w *Writer) WriteBody(p []byte) (int, error) {
+	if w.state != writerStateHeadersWritten() {
+		return 0, fmt.Errorf("trying to write Body not in HeadersWritten state")
+	}
+	w.state = writerStateBodyWritten()
+	w.state = writerStateDone()
+	return 0, nil
 }
 
 type StatusCode [3]rune
