@@ -1,7 +1,6 @@
 package response
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"strconv"
@@ -44,16 +43,14 @@ func writerStateDone() writerState {
 }
 
 type Writer struct {
-	statusLine *statusLine
-	headers    *headers.Headers
-	body       *bytes.Buffer
-	conn       io.Writer
-	state      writerState
+	conn  io.Writer
+	state writerState
 }
 
-func NewWriter(conn io.Writer) Writer {
-	return Writer{
+func NewWriter(conn io.Writer) *Writer {
+	return &Writer{
 		state: writerStateInitialized(),
+		conn:  conn,
 	}
 }
 
@@ -61,25 +58,39 @@ func (w *Writer) WriteStatusLine(sc StatusCode) error {
 	if w.state != writerStateInitialized() {
 		return fmt.Errorf("trying to write Status Line int Initialized Writer state")
 	}
-	w.state = writerStateStatusLineWritten()
-	return nil
+	buf := []byte(newStatusLine("1.1", sc))
+	_, err := w.conn.Write(buf)
+	if err == nil {
+		w.state = writerStateStatusLineWritten()
+	}
+	return err
 }
 
 func (w *Writer) WriteHeaders(h headers.Headers) error {
 	if w.state != writerStateStatusLineWritten() {
 		return fmt.Errorf("trying to write Headers not in StatusLineWritten state")
 	}
-	w.state = writerStateHeadersWritten()
-	return nil
+	buf := headersToBuf(h)
+	_, err := w.conn.Write(buf)
+	if err == nil {
+		w.state = writerStateHeadersWritten()
+		if _, ok := h.Get("content-length"); !ok {
+			w.state = writerStateDone()
+		}
+	}
+	return err
 }
 
 func (w *Writer) WriteBody(p []byte) (int, error) {
 	if w.state != writerStateHeadersWritten() {
 		return 0, fmt.Errorf("trying to write Body not in HeadersWritten state")
 	}
-	w.state = writerStateBodyWritten()
-	w.state = writerStateDone()
-	return 0, nil
+	n, err := w.conn.Write(p)
+	if err == nil {
+		w.state = writerStateBodyWritten()
+		w.state = writerStateDone()
+	}
+	return n, err
 }
 
 type StatusCode [3]rune
@@ -114,11 +125,10 @@ func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
 }
 
 func GetDefaultHeaders(contentLength int) headers.Headers {
-	headers := headers.Headers{
-		"Content-Length": strconv.Itoa(contentLength),
-		"Connection":     "close",
-		"Content-Type":   "text/plain",
-	}
+	headers := headers.Headers{}
+	headers.Set("Content-Length", strconv.Itoa(contentLength))
+	headers.Set("Connection", "close")
+	headers.Set("Content-Type", "text/plain")
 	return headers
 }
 

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
 	"net"
 	"os"
@@ -19,10 +18,10 @@ const (
 type Server struct {
 	listener net.Listener
 	closed   atomic.Bool
-	handler  Handler
+	handler  HandlerV2
 }
 
-func Serve(port int, h Handler) (*Server, error) {
+func Serve(port int, h HandlerV2) (*Server, error) {
 	var server Server
 	server.handler = h
 	address := fmt.Sprintf("127.0.0.1:%d", port)
@@ -69,22 +68,6 @@ func (s *Server) handle(conn net.Conn) {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	var buf bytes.Buffer
-	handlerErr := s.handler(&buf, request)
-	if handlerErr != nil {
-		handlerErr.writeError(conn)
-		return
-	}
-	headers := response.GetDefaultHeaders(buf.Len())
-	response.WriteStatusLine(conn, response.StatusCodeOK())
-	err = response.WriteHeaders(conn, headers)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
-	_, err = conn.Write(buf.Bytes())
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return
-	}
+	res := response.NewWriter(conn)
+	s.handler(res, request)
 }

@@ -70,6 +70,11 @@ func (h Headers) Get(header string) (value string, ok bool) {
 	return value, ok
 }
 
+func (h Headers) Set(header string, value string) {
+	header = strings.ToLower(header)
+	h[header] = value
+}
+
 func validFieldName(data []byte) (string, error) {
 	fieldName := string(bytes.ToLower(data))
 	for i, v := range fieldName {
