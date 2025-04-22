@@ -5,8 +5,12 @@ import (
 )
 
 const (
-	httpName = "HTTP"
+	httpName      = "HTTP"
+	CR       rune = '\r'
+	LF            = '\n'
 )
+
+var ByteCRLF = []byte{byte('\r'), byte('\n')}
 
 func GetHttpVersion(version string) string {
 	return httpName + "/" + version

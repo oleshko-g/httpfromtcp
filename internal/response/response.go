@@ -15,12 +15,6 @@ var statusCodes = map[StatusCode]string{
 	StatusCodeInternalServerError(): "Internal Server Error",
 }
 
-type statusLine struct {
-	_HTTPVersion string
-	statusCode   StatusCode
-	reason       *string
-}
-
 type writerState string
 
 func writerStateInitialized() writerState {
@@ -32,6 +26,10 @@ func writerStateStatusLineWritten() writerState {
 
 func writerStateHeadersWritten() writerState {
 	return "Headers written"
+}
+
+func writerStateBodyWritingStarted() writerState {
+	return "Body writing have started"
 }
 
 func writerStateBodyWritten() writerState {
@@ -91,6 +89,28 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 		w.state = writerStateDone()
 	}
 	return n, err
+}
+
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	if w.state != writerStateHeadersWritten() {
+		return 0, fmt.Errorf("trying to write Body not in HeadersWritten state")
+	}
+	p = wrapChunk(p)
+	n, err := w.conn.Write(p)
+	if err == nil {
+		w.state = writerStateBodyWritingStarted()
+	}
+	return n, err
+}
+
+func wrapChunk(c []byte) []byte {
+	hexChunkLength := fmt.Sprintf("%X", len(c))
+	bytePrefix := append([]byte(hexChunkLength), http.ByteCRLF...)
+	bytePostfix := http.ByteCRLF
+	prefixedChunk := append(bytePrefix, c...)
+	wrappedChunk := append(prefixedChunk, bytePostfix...)
+
+	return wrappedChunk
 }
 
 type StatusCode [3]rune
