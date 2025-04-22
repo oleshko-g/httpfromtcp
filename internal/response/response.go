@@ -103,6 +103,20 @@ func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
 	return n, err
 }
 
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	if w.state != writerStateHeadersWritten() || w.state != writerStateBodyWritingStarted() {
+		return 0, fmt.Errorf("trying to write Body not in HeadersWritten OR BodyWritingStarted state")
+	}
+	var emptySlice []byte
+	lastChunk := wrapChunk(emptySlice)
+	n, err := w.conn.Write(lastChunk)
+	if err == nil {
+		w.state = writerStateBodyWritten()
+		w.state = writerStateDone()
+	}
+	return n, err
+}
+
 func wrapChunk(c []byte) []byte {
 	hexChunkLength := fmt.Sprintf("%X", len(c))
 	bytePrefix := append([]byte(hexChunkLength), http.ByteCRLF...)
