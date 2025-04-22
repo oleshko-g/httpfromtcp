@@ -1,12 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 
+	"github.com/oleshko-g/httpfromtcp/internal/headers"
 	"github.com/oleshko-g/httpfromtcp/internal/request"
 	"github.com/oleshko-g/httpfromtcp/internal/response"
 	"github.com/oleshko-g/httpfromtcp/internal/server"
@@ -84,10 +89,74 @@ func myProblemYourProblemV2(res *response.Writer, req *request.Request) {
 	}
 }
 
-func main() {
-	server, err := server.Serve(port, myProblemYourProblemV2)
+func convertStdStatusCode(stdStatusCode int) response.StatusCode {
+	return response.StatusCode([]rune(strconv.Itoa(stdStatusCode)))
+}
+
+func httpBinStreamHandler(res *response.Writer, req *request.Request) {
+	if !strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/stream/") {
+		res.WriteStatusLine(response.StatusCodeNotFound())
+		headers := response.GetDefaultHeaders(0)
+		res.WriteHeaders(headers)
+		return
+	}
+
+	numberOfResponces := strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin/stream/")
+	const httpBinStreamAddress = "https://httpbin.org/stream/%s"
+	fullAddress := fmt.Sprintf(httpBinStreamAddress, numberOfResponces)
+
+	httpBinResp, err := http.Get(fullAddress)
 	if err != nil {
-		log.Fatalf("Error starting server: %v", err)
+		fmt.Fprintf(os.Stderr, "error making request to %s", fullAddress)
+		return
+	}
+
+	if httpBinResp.StatusCode < 200 || httpBinResp.StatusCode >= 300 {
+		statusCode := convertStdStatusCode(httpBinResp.StatusCode)
+		res.WriteStatusLine(statusCode)
+		headers := response.GetDefaultHeaders(0)
+		res.WriteHeaders(headers)
+		return
+	}
+
+	res.WriteStatusLine(response.StatusCodeOK())
+	headers := make(headers.Headers)
+	for header, values := range httpBinResp.Header {
+		if header == "Content-Length" {
+			continue
+		}
+		for _, value := range values {
+			headers.Set(header, value)
+		}
+	}
+	headers.Set("Transfer-Encoding", "chunked")
+	res.WriteHeaders(headers)
+	fmt.Printf("%#v\n", headers)
+	buf := make([]byte, 32)
+	for i := 0; ; i++ {
+		bytesRead, errRead := httpBinResp.Body.Read(buf)
+		if bytesRead == 0 && errRead == io.EOF {
+			break
+		}
+
+		if errRead != nil {
+			fmt.Fprintf(os.Stderr, "error reading response Body of %s\n", fullAddress)
+			return
+		}
+
+		_, errWrite := res.WriteChunkedBody(buf)
+		if errWrite != nil {
+			fmt.Fprintf(os.Stderr, "error writing response Body of %s: %s\n", fullAddress, errWrite)
+			return
+		}
+	}
+	res.WriteChunkedBodyDone()
+}
+
+func main() {
+	server, err := server.Serve(port, httpBinStreamHandler)
+	if err != nil {
+		log.Fatalf("Error starting server: %v\n", err)
 	}
 	defer server.Close()
 	log.Println("Server started on port", port)

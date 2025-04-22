@@ -12,6 +12,7 @@ import (
 var statusCodes = map[StatusCode]string{
 	StatusCodeOK():                  "OK",
 	StatusCodeBadRequest():          "Bad Request",
+	StatusCodeNotFound():            "Not Found",
 	StatusCodeInternalServerError(): "Internal Server Error",
 }
 
@@ -54,7 +55,7 @@ func NewWriter(conn io.Writer) *Writer {
 
 func (w *Writer) WriteStatusLine(sc StatusCode) error {
 	if w.state != writerStateInitialized() {
-		return fmt.Errorf("trying to write Status Line int Initialized Writer state")
+		return fmt.Errorf("trying to WriteStatusLine() int Initialized Writer state")
 	}
 	buf := []byte(newStatusLine("1.1", sc))
 	_, err := w.conn.Write(buf)
@@ -66,14 +67,18 @@ func (w *Writer) WriteStatusLine(sc StatusCode) error {
 
 func (w *Writer) WriteHeaders(h headers.Headers) error {
 	if w.state != writerStateStatusLineWritten() {
-		return fmt.Errorf("trying to write Headers not in StatusLineWritten state")
+		return fmt.Errorf("trying to WriteHeaders() not in StatusLineWritten state")
 	}
 	buf := headersToBuf(h)
 	_, err := w.conn.Write(buf)
 	if err == nil {
 		w.state = writerStateHeadersWritten()
+		if v, _ := h.Get("transfer-encoding"); v == "chunked" {
+			return nil
+		}
 		if _, ok := h.Get("content-length"); !ok {
 			w.state = writerStateDone()
+			return nil
 		}
 	}
 	return err
@@ -81,7 +86,7 @@ func (w *Writer) WriteHeaders(h headers.Headers) error {
 
 func (w *Writer) WriteBody(p []byte) (int, error) {
 	if w.state != writerStateHeadersWritten() {
-		return 0, fmt.Errorf("trying to write Body not in HeadersWritten state")
+		return 0, fmt.Errorf("trying to WriteBody() not in HeadersWritten state")
 	}
 	n, err := w.conn.Write(p)
 	if err == nil {
@@ -92,20 +97,21 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 }
 
 func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
-	if w.state != writerStateHeadersWritten() {
-		return 0, fmt.Errorf("trying to write Body not in HeadersWritten state")
+	if w.state != writerStateHeadersWritten() && w.state != writerStateBodyWritingStarted() {
+		return 0, fmt.Errorf("trying to WriteChunkedBody() in the states that are not HeadersWritten, BodyWritingStarted")
 	}
 	p = wrapChunk(p)
 	n, err := w.conn.Write(p)
 	if err == nil {
 		w.state = writerStateBodyWritingStarted()
+		return n, nil
 	}
 	return n, err
 }
 
 func (w *Writer) WriteChunkedBodyDone() (int, error) {
-	if w.state != writerStateHeadersWritten() || w.state != writerStateBodyWritingStarted() {
-		return 0, fmt.Errorf("trying to write Body not in HeadersWritten OR BodyWritingStarted state")
+	if w.state != writerStateHeadersWritten() && w.state != writerStateBodyWritingStarted() {
+		return 0, fmt.Errorf("trying to WriteChunkedBodyDone() in the states that are not HeadersWritten, BodyWritingStarted")
 	}
 	var emptySlice []byte
 	lastChunk := wrapChunk(emptySlice)
@@ -139,6 +145,10 @@ func StatusCodeOK() StatusCode {
 
 func StatusCodeBadRequest() StatusCode {
 	return StatusCode{'4', '0', '0'}
+}
+
+func StatusCodeNotFound() StatusCode {
+	return StatusCode{'4', '0', '4'}
 }
 
 func StatusCodeInternalServerError() StatusCode {
