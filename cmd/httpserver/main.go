@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"log"
@@ -94,16 +95,14 @@ func convertStdStatusCode(stdStatusCode int) response.StatusCode {
 }
 
 func httpBinStreamHandler(res *response.Writer, req *request.Request) {
-	if !strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/stream/") {
+	if !strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/html") {
 		res.WriteStatusLine(response.StatusCodeNotFound())
 		headers := response.GetDefaultHeaders(0)
 		res.WriteHeaders(headers)
 		return
 	}
 
-	numberOfResponces := strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin/stream/")
-	const httpBinStreamAddress = "https://httpbin.org/stream/%s"
-	fullAddress := fmt.Sprintf(httpBinStreamAddress, numberOfResponces)
+	fullAddress := "https://httpbin.org/html"
 
 	httpBinResp, err := http.Get(fullAddress)
 	if err != nil {
@@ -120,37 +119,57 @@ func httpBinStreamHandler(res *response.Writer, req *request.Request) {
 	}
 
 	res.WriteStatusLine(response.StatusCodeOK())
-	headers := make(headers.Headers)
+	resHeaders := make(headers.Headers)
 	for header, values := range httpBinResp.Header {
 		if header == "Content-Length" {
 			continue
 		}
 		for _, value := range values {
-			headers.Set(header, value)
+			resHeaders.Set(header, value)
 		}
 	}
-	headers.Set("Transfer-Encoding", "chunked")
-	res.WriteHeaders(headers)
-	fmt.Printf("%#v\n", headers)
+	resHeaders.Set("Transfer-Encoding", "chunked")
+	resHeaders.Set("Trailer", "X-Content-SHA256")
+	resHeaders.Set("Trailer", "X-Content-Length")
+	res.WriteHeaders(resHeaders)
+	fmt.Printf("%#v\n", resHeaders)
 	buf := make([]byte, 32)
-	for i := 0; ; i++ {
-		bytesRead, errRead := httpBinResp.Body.Read(buf)
-		if bytesRead == 0 && errRead == io.EOF {
-			break
-		}
 
-		if errRead != nil {
+	var resBody []byte
+	var i int
+	for ; ; i++ {
+		bytesRead, errRead := httpBinResp.Body.Read(buf)
+
+		if errRead != nil && errRead != io.EOF {
 			fmt.Fprintf(os.Stderr, "error reading response Body of %s\n", fullAddress)
 			return
 		}
-
-		_, errWrite := res.WriteChunkedBody(buf)
+		resBody = append(resBody, buf[:bytesRead]...)
+		_, errWrite := res.WriteChunkedBody(buf[:bytesRead])
 		if errWrite != nil {
 			fmt.Fprintf(os.Stderr, "error writing response Body of %s: %s\n", fullAddress, errWrite)
 			return
 		}
+		if bytesRead == 0 && errRead == io.EOF {
+			break
+		}
 	}
-	res.WriteChunkedBodyDone()
+	fmt.Printf("%d\n", i)
+	trailers := make(headers.Headers)
+	trailers.Set("X-Content-Sha256", fmt.Sprintf("%x", sha256.Sum256(resBody)))
+	trailers.Set("X-Content-Length", strconv.Itoa(len(resBody)))
+	fmt.Printf("%+v\n", trailers)
+	err = res.WriteTrailers(trailers)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errr: %s", err)
+		return
+	}
+
+	_, err = res.WriteDone()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "errr: %s", err)
+		return
+	}
 }
 
 func main() {

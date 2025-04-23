@@ -22,19 +22,23 @@ func writerStateInitialized() writerState {
 	return "Initialized"
 }
 func writerStateStatusLineWritten() writerState {
-	return "Status line written"
+	return "Status line is written"
 }
 
 func writerStateHeadersWritten() writerState {
-	return "Headers written"
+	return "Headers are written"
 }
 
 func writerStateBodyWritingStarted() writerState {
-	return "Body writing have started"
+	return "Body is writing has started"
 }
 
 func writerStateBodyWritten() writerState {
-	return "Body written"
+	return "Body is written"
+}
+
+func writerStateTrailersWritten() writerState {
+	return "Trailers are written"
 }
 
 func writerStateDone() writerState {
@@ -84,6 +88,20 @@ func (w *Writer) WriteHeaders(h headers.Headers) error {
 	return err
 }
 
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	checkSum, _ := h.Get("X-Content-Sha256")
+	contentLength, _ := h.Get("X-Content-Length")
+	buf := headerToBuf("X-Content-Sha256", checkSum)
+	buf = append(buf, headerToBuf("X-Content-Length", contentLength)...)
+
+	_, err := w.conn.Write(buf)
+	if err != nil {
+		return fmt.Errorf("error: %s", err)
+	}
+	w.state = writerStateTrailersWritten()
+	return nil
+}
+
 func (w *Writer) WriteBody(p []byte) (int, error) {
 	if w.state != writerStateHeadersWritten() {
 		return 0, fmt.Errorf("trying to WriteBody() not in HeadersWritten state")
@@ -100,24 +118,26 @@ func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
 	if w.state != writerStateHeadersWritten() && w.state != writerStateBodyWritingStarted() {
 		return 0, fmt.Errorf("trying to WriteChunkedBody() in the states that are not HeadersWritten, BodyWritingStarted")
 	}
-	p = wrapChunk(p)
-	n, err := w.conn.Write(p)
+	wrappedChunk := wrapChunk(p)
+	n, err := w.conn.Write(wrappedChunk)
 	if err == nil {
 		w.state = writerStateBodyWritingStarted()
+		if len(p) == 0 {
+			w.state = writerStateBodyWritten()
+		}
 		return n, nil
 	}
+
 	return n, err
 }
 
-func (w *Writer) WriteChunkedBodyDone() (int, error) {
-	if w.state != writerStateHeadersWritten() && w.state != writerStateBodyWritingStarted() {
-		return 0, fmt.Errorf("trying to WriteChunkedBodyDone() in the states that are not HeadersWritten, BodyWritingStarted")
+func (w *Writer) WriteDone() (int, error) {
+	if w.state != writerStateHeadersWritten() && w.state != writerStateBodyWritten() && w.state != writerStateTrailersWritten() {
+		return 0, fmt.Errorf("trying to WriteDone() in the states that are not HeadersWritten, BodyWritingStarted, TrailersWritten")
 	}
-	var emptySlice []byte
-	lastChunk := wrapChunk(emptySlice)
-	n, err := w.conn.Write(lastChunk)
+
+	n, err := w.conn.Write(http.ByteCRLF)
 	if err == nil {
-		w.state = writerStateBodyWritten()
 		w.state = writerStateDone()
 	}
 	return n, err
@@ -126,10 +146,12 @@ func (w *Writer) WriteChunkedBodyDone() (int, error) {
 func wrapChunk(c []byte) []byte {
 	hexChunkLength := fmt.Sprintf("%X", len(c))
 	bytePrefix := append([]byte(hexChunkLength), http.ByteCRLF...)
-	bytePostfix := http.ByteCRLF
 	prefixedChunk := append(bytePrefix, c...)
-	wrappedChunk := append(prefixedChunk, bytePostfix...)
+	if hexChunkLength == "0" {
+		return prefixedChunk
+	}
 
+	wrappedChunk := append(prefixedChunk, http.ByteCRLF...)
 	return wrappedChunk
 }
 
@@ -189,6 +211,14 @@ func headersToBuf(headers headers.Headers) []byte {
 		buf = append(buf, []byte(value)...)
 		buf = append(buf, '\r', '\n')
 	}
+	buf = append(buf, '\r', '\n')
+	return buf
+}
+
+func headerToBuf(header string, value string) []byte {
+	var buf []byte
+	buf = append(buf, []byte(header+": ")...)
+	buf = append(buf, []byte(value)...)
 	buf = append(buf, '\r', '\n')
 	return buf
 }
