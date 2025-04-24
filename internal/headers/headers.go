@@ -24,7 +24,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 			if colonIndex > 0 {
 				fieldName, err := validFieldName(rawFieldLine[:colonIndex])
 				if err != nil {
-					return 0, false, fmt.Errorf("400 Bad Request")
+					return 0, false, fmt.Errorf("400 Bad Request 1")
 				}
 
 				fieldValue := string(bytes.TrimSpace(rawFieldLine[colonIndex+1:]))
@@ -47,8 +47,11 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 				continue
 			}
 
-			if colonIndex == -1 || colonIndex == 0 {
-				return 0, false, fmt.Errorf("400 Bad Request")
+			// if colonIndex == -1 || colonIndex == 0 {
+			// 	return 0, false, fmt.Errorf("400 Bad Request 2")
+			// }
+			if colonIndex == 0 {
+				return 0, false, fmt.Errorf("400 Bad Request 2")
 			}
 		}
 
@@ -79,6 +82,14 @@ func (h Headers) Set(header string, newValue string) {
 	}
 
 	h[header] = newValue
+}
+
+func (h Headers) GetFirstValue(header string) (string, bool) {
+	values, ok := h.Get(header)
+	if !ok {
+		return "", false
+	}
+	return strings.Split(values, ",")[0], true
 }
 
 func validFieldName(data []byte) (string, error) {

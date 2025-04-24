@@ -151,21 +151,21 @@ func parseRequestLine(data []byte) (int, RequestLine, error) {
 
 	parts := strings.Split(requestString, " ")
 	if len(parts) != 3 {
-		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
+		return 0, RequestLine{}, fmt.Errorf("400 Bad Request 3")
 	}
 
 	if !http.ValidHTTPMethod(parts[0]) {
-		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
+		return 0, RequestLine{}, fmt.Errorf("400 Bad Request 4")
 	}
 	method := parts[0]
 
 	if !http.ValidHTTPTarget(parts[1]) {
-		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
+		return 0, RequestLine{}, fmt.Errorf("400 Bad Request 5")
 	}
 	target := parts[1]
 
 	if !http.ValidHTTPVersion(parts[2]) {
-		return 0, RequestLine{}, fmt.Errorf("400 Bad Request")
+		return 0, RequestLine{}, fmt.Errorf("400 Bad Request 6")
 	}
 	version := strings.Split(parts[2], "/")[1]
 

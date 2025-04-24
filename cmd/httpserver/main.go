@@ -172,8 +172,31 @@ func httpBinStreamHandler(res *response.Writer, req *request.Request) {
 	}
 }
 
+func videoHandler(res *response.Writer, req *request.Request) {
+	if !strings.HasPrefix(req.RequestLine.RequestTarget, "/video") {
+		res.WriteStatusLine(response.StatusCodeNotFound())
+		headers := response.GetDefaultHeaders(0)
+		res.WriteHeaders(headers)
+		return
+	}
+	const fileName = "../../assets/vim.mp4"
+	video, err := os.ReadFile(fileName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading the file %s: %s", fileName, err)
+		return
+	}
+
+	res.WriteStatusLine(response.StatusCodeOK())
+	resHeaders := headers.NewHeaders()
+	resHeaders.Set("Connection", "close")
+	resHeaders.Set("Content-Length", fmt.Sprintf("%d", len(video)))
+	resHeaders.Set("Content-Type", "video/mp4")
+	res.WriteHeaders(resHeaders)
+	res.WriteBody(video)
+}
+
 func main() {
-	server, err := server.Serve(port, httpBinStreamHandler)
+	server, err := server.Serve(port, videoHandler)
 	if err != nil {
 		log.Fatalf("Error starting server: %v\n", err)
 	}
