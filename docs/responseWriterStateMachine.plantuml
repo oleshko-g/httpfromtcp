@@ -1,0 +1,26 @@
+@startuml responseWriterStateMachine
+hide empty description
+state Initialized <<start>>
+state Done <<end>>
+state c1 <<choice>>
+state c2 <<choice>>
+state c3 <<choice>>
+state Initialized 
+state StatusLineWritten as "Status line is written"
+state HeadersWritten as "Headers are written"
+state BodyWritingStarted as "Body writing has started"
+state BodyWritten as "Body is written"
+state TrailersWritten as "Trailers are written"
+Initialized -> StatusLineWritten
+StatusLineWritten -> HeadersWritten
+HeadersWritten -> c1 
+c1 --> BodyWritingStarted : "Content-Length" is abscent present AND "Transfer-Encoding" is "chunked"
+c1 -> Done : "Content-Length" header is abscent
+BodyWritingStarted --> c2 
+c2 -> BodyWritten : Body length in bytes is equal to "Content-Length"
+c2 -> BodyWritten : Chunk with zero length encountered
+BodyWritten -> c3
+c3 -up-> Done : "Trailer" header is abscent
+c3 -> TrailersWritten : "Trailer" header is present
+TrailersWritten --> Done
+@enduml
